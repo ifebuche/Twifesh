@@ -11,3 +11,6 @@ After some frustrations with tweepy around the v2 of Twitter API, I decided to w
 
 - In your elevated dev account, make sure to setup a project in your account and then create an app under the project. It is a requirement from Twitter
 - You will then get your bearer token.
+
+- Twitter Docs:
+https://developer.twitter.com/en/docs/twitter-api/tweets/filtered-stream/introduction
