@@ -14,3 +14,21 @@ After some frustrations with tweepy around the v2 of Twitter API, I decided to w
 
 - Twitter Docs:
 https://developer.twitter.com/en/docs/twitter-api/tweets/filtered-stream/introduction
+<br>
+
+**Output**
+- The output is a json file with same name as the keywords, ending in the date and time of the run
+
+**Example1**
+
+*twifesh = Twifesh(['a topic', 'another topic'])* <br>
+*twifesh.stream_now()*
+
+**Example2**
+
+*twifesh = Twifesh()* <br>
+*twifesh.stream_now()*
+
+<br>
+- output: *a_topic_another_topic_2022July4_00_00_00s.json*
+
