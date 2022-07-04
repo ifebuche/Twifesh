@@ -22,17 +22,19 @@ headers = {"Authorization":f"Bearer {bearer_token}", "User-Agent" : "TwifeshStre
 
 
 class Twifesh():
-    def __init__(self):
-        self.keywords = [] #This will form part of our filename
+    def __init__(self, keywords=None):
+        self.keywords = keywords
+        if not self.keywords:
+            self.keywords = [] #This will form part of our filename
         self.time_obj_str = dt.strftime(dt.now(), '%Y%B%d_%H_%M_%ms') #This will form part of our filename
         
-    def bearer_oauth(self, r):
+    def bearer_oauth(self, header):
         """
         Method required by bearer token authentication.
         """
-        r.headers["Authorization"] = f"Bearer {bearer_token}"
-        r.headers["User-Agent"] = "TwiFeshStreamer"
-        return r
+        header.headers["Authorization"] = f"Bearer {bearer_token}"
+        header.headers["User-Agent"] = "TwiFeshStreamer"
+        return header
 
 
     def get_rules(self):
@@ -78,20 +80,27 @@ class Twifesh():
         """
         This uses feedback from the user to get and set the new rule(s)
         """
-        print("What are we streaming for? If there are more than one topic, seperate them with commas.\n\
-        PS: Maximum topics we are going to take is 5.\n")
-        my_rules = input(">>> ")
-        while not my_rules:
-            print("Please enter a keyword to stream...")
+        keywords_array = []
+
+        if not self.keywords:
+            print("What are we streaming for? If there are more than one topic, seperate them with commas.\n\
+            PS: Maximum topics we are going to take is 5.\n")
             my_rules = input(">>> ")
+            while not my_rules:
+                print("Please enter a keyword to stream...")
+                my_rules = input(">>> ")
+            
+            
+            for word in my_rules.split(',')[:5]:
+                keeper_dict = {"value": word.strip()}
+                keywords_array.append(keeper_dict)
+                self.keywords.append(word.strip())
+        else:
+            for word in self.keywords:
+                keeper_dict = {"value": word.strip()}
+                keywords_array.append(keeper_dict) 
         
-        keywords = []
-        for word in my_rules.split(',')[:5]:
-            keeper_dict = {"value": word.strip()}
-            keywords.append(keeper_dict)
-            self.keywords.append(word.strip())
-        
-        payload = {"add": keywords}
+        payload = {"add": keywords_array}
         response = requests.post(
             "https://api.twitter.com/2/tweets/search/stream/rules",
             auth=self.bearer_oauth,
