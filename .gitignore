@@ -1,4 +1,7 @@
-# skips
+# Skips the specified file types
+__pycache__/
+.pytest_cache/
+*.json
 db.sqlite3
 *.log
 *.pot
