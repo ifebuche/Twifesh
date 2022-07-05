@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Created on Sunday July 3, 2022 19:53:37 2018
+Created on Sunday July 3, 2022 19:53:37 2022
+Updated to initialize with bear_token
 
 @author: Fesh
 """
@@ -18,21 +19,19 @@ import json
 from datetime import datetime as dt
 from keys import bearer_token
 
-headers = {"Authorization":f"Bearer {bearer_token}", "User-Agent" : "TwifeshStreamPython"}
-
-
 class Twifesh():
-    def __init__(self, keywords=None):
+    def __init__(self, bearer_token, keywords=None):
         self.keywords = keywords
         if not self.keywords:
             self.keywords = [] #This will form part of our filename
         self.time_obj_str = dt.strftime(dt.now(), '%Y%B%d_%H_%M_%ms') #This will form part of our filename
+        self.bearer_token = bearer_token
         
     def bearer_oauth(self, header):
         """
         Method required by bearer token authentication.
         """
-        header.headers["Authorization"] = f"Bearer {bearer_token}"
+        header.headers["Authorization"] = f"Bearer {self.bearer_token}"
         header.headers["User-Agent"] = "TwiFeshStreamer"
         return header
 
@@ -189,5 +188,5 @@ class Twifesh():
             self.get_stream()
 
 
-twifesh = Twifesh([]) #Pass an string or an array of strings to stream. If empty, you will get a chance to type them in.
+twifesh = Twifesh(bearer_token=bearer_token) #Pass an string or an array of strings to stream. If empty, you will get a chance to type them in.
 twifesh.stream_now()

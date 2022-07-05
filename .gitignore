@@ -1,0 +1,12 @@
+# skips
+db.sqlite3
+*.log
+*.pot
+*.pyc
+__pycache__
+.DS_Store
+*.pyc
+*.db
+*.pid
+*.env
+*__pycache__
