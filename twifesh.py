@@ -83,10 +83,16 @@ class Twifesh():
         keywords_array = []
 
         if not self.keywords:
+            attempts = 0
             print("What are we streaming for? If there are more than one topic, seperate them with commas.\n\
-            PS: Maximum topics we are going to take is 5.\n")
+            PS: Maximum topics we can stream is 5.\n")
             my_rules = input(">>> ")
             while not my_rules:
+                if attempts == 3:
+                    print("Please restart the module.")
+                    raise SystemExit
+                attempts += 1
+                print(f"We need a keyword or an array of keywords, max 5. Please try again: {attempts}/3")
                 print("Please enter a keyword to stream...")
                 my_rules = input(">>> ")
             
@@ -125,7 +131,7 @@ class Twifesh():
                     response.status_code, response.text
                 )
             )
-        print("Connection to stream successful!")
+        print("Connection to stream successful! \nListening ...")
         for response_line in response.iter_lines():
             if response_line:
                 json_response = json.loads(response_line)
@@ -183,5 +189,5 @@ class Twifesh():
             self.get_stream()
 
 
-twifesh = Twifesh()
+twifesh = Twifesh([]) #Pass an string or an array of strings to stream. If empty, you will get a chance to type them in.
 twifesh.stream_now()
