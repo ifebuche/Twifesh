@@ -21,12 +21,12 @@ https://developer.twitter.com/en/docs/twitter-api/tweets/filtered-stream/introdu
 
 **Example1**
 
-*twifesh = Twifesh(['a topic', 'another topic'])* <br>
+*twifesh = Twifesh(bearer_token, ['a topic', 'another topic'])* <br>
 *twifesh.stream_now()*
 
 **Example2**
 
-*twifesh = Twifesh()* <br>
+*twifesh = Twifesh(bearer_token)* <br>
 *twifesh.stream_now()*
 
 <br>

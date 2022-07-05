@@ -1,3 +1,18 @@
+<<<<<<< HEAD
 __pycache__/
 .pytest_cache/
 *.json
+=======
+# skips
+db.sqlite3
+*.log
+*.pot
+*.pyc
+__pycache__
+.DS_Store
+*.pyc
+*.db
+*.pid
+*.env
+*__pycache__
+>>>>>>> 6101339b5039755bb2e787ce3ad9e07e2b16c660
