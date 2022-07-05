@@ -17,6 +17,7 @@ Updated to initialize with bear_token
 import requests
 import json
 from datetime import datetime as dt
+import re
 from keys import bearer_token
 
 class Twifesh():
@@ -119,6 +120,11 @@ class Twifesh():
         print(f"Rule(s) successfully set for keywords {[line for line in self.keywords][:5]}.")
         return True
 
+    def clean_tweet(self, tweet):
+        tweet = re.sub(r"http\S+", "", tweet)
+        tweet = re.sub(r"https\S+", "", tweet)
+        tweet = re.sub('[^A-Za-z0-9]+', ' ', tweet)
+        return tweet
 
     def get_stream(self):
         response = requests.get(
@@ -165,6 +171,7 @@ class Twifesh():
                                     'tweet_author_verified': includes.get('public_metrics').get('verified'),
                                     'tweet_author_name': includes.get('public_metrics').get('name'),
                                     'tweet' : data.get('text'),
+                                    'cleaned_tweet' : self.clean_tweet(data.get('text')),
                                     'source' : data.get('source'),
                                     'quoted_id' : ','.join([line['id'] for line in data.get('referenced_tweets') if line['type'] == 'quoted']),
                                     'in_reply_to_id': ','.join([line['id'] for line in data.get('referenced_tweets') if line['type'] == 'replied_to'])

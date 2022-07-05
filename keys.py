@@ -1,5 +1,5 @@
 #Twifesh is expected to integrate put to AWS S3
-#This is the reason for the aws artefacts here
+#This is the reason for the aws artifacts here
 #For streaming tweets, all you need if the bearer token from your Elevated Twitter dev account
 
 access_token = "Add yours"
