@@ -4,6 +4,7 @@ Created on Sunday July 3, 2022 19:53:37 2022
 Updated to initialize with bear_token
 
 @author: Fesh
+Contributors: Prince Analyst 
 """
 #####################################################################################################################################################################
 ##Summary: This module streams tweet from the official Twitter API v2 via an elevated developer account.
@@ -18,16 +19,11 @@ import requests
 import json
 from datetime import datetime as dt
 import re
-from keys import bearer_token
 
-class Twifesh():
-    def __init__(self, bearer_token, keywords=None):
-        self.keywords = keywords
-        if not self.keywords:
-            self.keywords = [] #This will form part of our filename
-        self.time_obj_str = dt.strftime(dt.now(), '%Y%B%d_%H_%M_%ms') #This will form part of our filename
+class FeshBuilder:
+    def __init__(self, bearer_token):
         self.bearer_token = bearer_token
-        
+
     def bearer_oauth(self, header):
         """
         Method required by bearer token authentication.
@@ -36,6 +32,17 @@ class Twifesh():
         header.headers["User-Agent"] = "TwiFeshStreamer"
         return header
 
+
+class Stream(FeshBuilder):
+    def __init__(self, bearer_token, keywords=None, write_file=False):
+        super().__init__(bearer_token)
+        self.keywords = keywords
+        self.write_file = False
+        if not self.keywords:
+            self.keywords = [] #This will form part of our filename
+        self.time_obj_str = dt.strftime(dt.now(), '%Y%B%d_%H_%M_%ms') #This will form part of our filename
+        if write_file:
+            self.write_file = True
 
     def get_rules(self):
         response = requests.get(
@@ -176,10 +183,10 @@ class Twifesh():
                                     'quoted_id' : ','.join([line['id'] for line in data.get('referenced_tweets') if line['type'] == 'quoted']),
                                     'in_reply_to_id': ','.join([line['id'] for line in data.get('referenced_tweets') if line['type'] == 'replied_to'])
                                 }
-                    
-                    with open('_'.join(self.keywords) +self.time_obj_str + ".json", "a") as file:
-                        data = json.dumps(payloader)
-                        file.write(data + '\n')
+                    if self.write_file:
+                        with open('_'.join(self.keywords) +self.time_obj_str + ".json", "a") as file:
+                            data = json.dumps(payloader)
+                            file.write(data + '\n')
                     
                     print(data, '\n')
                     
@@ -193,7 +200,3 @@ class Twifesh():
         result = self.set_rules(delete)
         if result:
             self.get_stream()
-
-
-twifesh = Twifesh(bearer_token=bearer_token) #Pass an string or an array of strings to stream. If empty, you will get a chance to type them in.
-twifesh.stream_now()

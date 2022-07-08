@@ -4,10 +4,8 @@ After some frustrations with tweepy around the v2 of Twitter API, I decided to w
 
 **Requirements** 
 <br>
-- To run this module, some built-in python modules are required
-- *requests*
-- *datetime from datetime as dt*
-<br><br>
+- This module runs with builtin modules up to version 0.0.2
+<br>
 
 - In your elevated dev account, make sure to setup a project in your account and then create an app under the project. It is a requirement from Twitter
 - You will then get your bearer token.
@@ -19,16 +17,21 @@ https://developer.twitter.com/en/docs/twitter-api/tweets/filtered-stream/introdu
 **Output**
 - The output is a json file with same name as the keywords, ending in the date and time of the run
 
-**Example1**
+**Example1: file written, no interraction**
 
-*twifesh = Twifesh(bearer_token, keywords=['a topic', 'another topic'])* <br>
-*twifesh.stream_now()*
+$ from twifesh.api import Stream <br>
+$ twifesh = Stream(bearer_token, keywords=['topic1', 'topic2'], write_file=True) <br>
+$ twifesh.stream_now() <br>
 
-**Example2**
+- output: *topic1_topic2_2022July4_00_00_00s.json*
+<br><br>
 
-*twifesh = Twifesh(bearer_token)* <br>
-*twifesh.stream_now()*
+**Example2: no file written, asks for the topic(s)**
+
+$ from twifesh.api import Stream<br>
+$ twifesh = Stream(bearer_token) <br>
+$ twifesh.stream_now()
 
 <br>
-- output: *a_topic_another_topic_2022July4_00_00_00s.json*
+
 
