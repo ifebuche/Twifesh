@@ -23,6 +23,7 @@ import re
 class FeshBuilder:
     def __init__(self, bearer_token):
         self.bearer_token = bearer_token
+        self.time_obj_str = dt.strftime(dt.now(), '%Y%B%d_%H_%M_%ms') #This will form part of our filename
 
     def bearer_oauth(self, header):
         """
@@ -32,17 +33,114 @@ class FeshBuilder:
         header.headers["User-Agent"] = "TwiFeshStreamer"
         return header
 
+    def clean_tweet(self, tweet):
+        tweet = re.sub(r"http\S+", "", tweet)
+        tweet = re.sub(r"https\S+", "", tweet)
+        tweet = re.sub('[^A-Za-z0-9]+', ' ', tweet)
+        return tweet
+
+    def get_tweet_details(self, tweet_id):
+        """
+        Get the full detail of a tweet by tweet id string
+        """
+        try:
+            a_tweet = requests.get(
+                f"https://api.twitter.com/2/tweets/", 
+                params=
+                {'ids':tweet_id, 
+                    'user.fields':'created_at,description,entities,id,location,name,pinned_tweet_id,profile_image_url,protected,public_metrics,url,username,verified,withheld',
+                    'place.fields':'contained_within,country,country_code,full_name,geo,id,name,place_type', 
+                    'tweet.fields':'source,created_at,geo',
+                    'expansions': 'referenced_tweets.id.author_id'}, auth=self.bearer_oauth
+                )
+            data = json.loads(a_tweet.text)['data'][0]
+            includes = json.loads(a_tweet.text)['includes']['users'][0]
+            
+            payloader = {
+                            'tweet_id' : data.get('id'),
+                            'created_at' : data.get('created_at'),
+                            'tweet_author_id' : data.get('author_id'),
+                            'tweet_author_description' : includes.get('description'),
+                            'tweet_author_username' : includes.get('username'),
+                            'tweet_author_location' : includes.get('location'),
+                            'tweet_author_image' : includes.get('profile_image_url'),
+                            'tweet_author_join_date': includes.get('created_at'),
+                            'tweet_author_following_count': includes.get('public_metrics').get('following_count'),
+                            'tweet_author_followers_count': includes.get('public_metrics').get('followers_count'),
+                            'tweet_author_total_tweets':includes.get('public_metrics').get('tweet_count'),
+                            'tweet_author_verified': includes.get('public_metrics').get('verified'),
+                            'tweet_author_name': includes.get('public_metrics').get('name'),
+                            'tweet' : data.get('text'),
+                            'cleaned_tweet' : self.clean_tweet(data.get('text')),
+                            'source' : data.get('source'),
+                            'quoted_id' : ','.join([line['id'] for line in data.get('referenced_tweets') if line['type'] == 'quoted']),
+                            'in_reply_to_id': ','.join([line['id'] for line in data.get('referenced_tweets') if line['type'] == 'replied_to'])
+                        }
+            return payloader            
+        except Exception as e:
+            print(f"Error fetching full tweet details: => {e}")
+
+class Profile(FeshBuilder):
+    def __init__(self, bearer_token, usernames):
+        """
+        username: string with profile names seperated by commas and no spaces. eg: "profile1,profile2"
+        """
+        super().__init__(bearer_token)
+        self.usernames = usernames
+
+    def get_link(self):
+        # You can enter up to 100 comma-separated values.
+        usernames = f"usernames={self.usernames}"
+        user_fields = "user.fields=description,created_at,pinned_tweet_id,location,verified,profile_image_url,public_metrics"
+        url = f"https://api.twitter.com/2/users/by?{usernames}&{user_fields}"
+        return url
+
+    def get_profile(self):
+        try:
+            url = self.get_link()
+            response = requests.request("GET", url, auth=self.bearer_oauth)
+            if response.status_code != 200:
+                raise Exception(
+                    "Request returned an error: {} {}".format(
+                        response.status_code, response.text
+                    )
+                )
+            json_response = response.json()
+            result = []
+            try:
+                #Success with profile(s) match found
+                data = json_response.get('data')
+                errors = json_response.get('errors')
+                if data:
+                    for item in data:
+                        result.append(item)
+                if errors:
+                    for item in errors:
+                        result.append(item['detail'])
+            except KeyError:
+                #Success with no profile(s) match found
+                data =  json_response['errors']
+                if data:
+                    for item in data:
+                        result.append(item['detail'])
+            return result
+        except Exception as e:
+            print(f"Error fetching profile(s) url: {e}")
+            return None
+        
+
+
 
 class Stream(FeshBuilder):
-    def __init__(self, bearer_token, keywords=None, write_file=False):
+    def __init__(self, bearer_token, keywords=None, full_details=False, write_file=False):
         super().__init__(bearer_token)
-        self.keywords = keywords
         self.write_file = False
-        if not self.keywords:
-            self.keywords = [] #This will form part of our filename
-        self.time_obj_str = dt.strftime(dt.now(), '%Y%B%d_%H_%M_%ms') #This will form part of our filename
         if write_file:
-            self.write_file = True
+            self.write_file = write_file
+        self.keywords = keywords
+        if not self.keywords:
+            self.keywords = []
+        self.full_details = full_details
 
     def get_rules(self):
         response = requests.get(
@@ -127,12 +225,6 @@ class Stream(FeshBuilder):
         print(f"Rule(s) successfully set for keywords {[line for line in self.keywords][:5]}.")
         return True
 
-    def clean_tweet(self, tweet):
-        tweet = re.sub(r"http\S+", "", tweet)
-        tweet = re.sub(r"https\S+", "", tweet)
-        tweet = re.sub('[^A-Za-z0-9]+', ' ', tweet)
-        return tweet
-
     def get_stream(self):
         response = requests.get(
             "https://api.twitter.com/2/tweets/search/stream", auth=self.bearer_oauth, stream=True,
@@ -146,53 +238,17 @@ class Stream(FeshBuilder):
         print("Connection to stream successful! \nListening ...")
         for response_line in response.iter_lines():
             if response_line:
-                json_response = json.loads(response_line)
-                tweet_id = json_response['data']['id']
+                tweet_details = json.loads(response_line)
+                if self.full_details:
+                    #fetch the full tweet details
+                    tweet_id = tweet_details['data']['id']
+                    tweet_details = self.get_tweet_details(tweet_id)
+            if self.write_file:
+                with open('_'.join(self.keywords) +self.time_obj_str + ".json", "a") as file:
+                    data = json.dumps(tweet_details)
+                    file.write(data + '\n')
+            print(tweet_details, '\n')                   
                 
-                #fetch the full tweet details
-                try:
-                    a_tweet = requests.get(
-                        f"https://api.twitter.com/2/tweets/", 
-                        params=
-                        {'ids':tweet_id, 
-                         'user.fields':'created_at,description,entities,id,location,name,pinned_tweet_id,profile_image_url,protected,public_metrics,url,username,verified,withheld',
-                         'place.fields':'contained_within,country,country_code,full_name,geo,id,name,place_type', 
-                         'tweet.fields':'source,created_at,geo',
-                         'expansions': 'referenced_tweets.id.author_id'}, auth=self.bearer_oauth
-                        )
-                    data = json.loads(a_tweet.text)['data'][0]
-                    includes = json.loads(a_tweet.text)['includes']['users'][0]
-                    
-                    payloader = {
-                                    'tweet_id' : data.get('id'),
-                                    'created_at' : data.get('created_at'),
-                                    'tweet_author_id' : data.get('author_id'),
-                                    'tweet_author_description' : includes.get('description'),
-                                    'tweet_author_username' : includes.get('username'),
-                                    'tweet_author_location' : includes.get('location'),
-                                    'tweet_author_image' : includes.get('profile_image_url'),
-                                    'tweet_author_join_date': includes.get('created_at'),
-                                    'tweet_author_following_count': includes.get('public_metrics').get('following_count'),
-                                    'tweet_author_followers_count': includes.get('public_metrics').get('followers_count'),
-                                    'tweet_author_total_tweets':includes.get('public_metrics').get('tweet_count'),
-                                    'tweet_author_verified': includes.get('public_metrics').get('verified'),
-                                    'tweet_author_name': includes.get('public_metrics').get('name'),
-                                    'tweet' : data.get('text'),
-                                    'cleaned_tweet' : self.clean_tweet(data.get('text')),
-                                    'source' : data.get('source'),
-                                    'quoted_id' : ','.join([line['id'] for line in data.get('referenced_tweets') if line['type'] == 'quoted']),
-                                    'in_reply_to_id': ','.join([line['id'] for line in data.get('referenced_tweets') if line['type'] == 'replied_to'])
-                                }
-                    if self.write_file:
-                        with open('_'.join(self.keywords) +self.time_obj_str + ".json", "a") as file:
-                            data = json.dumps(payloader)
-                            file.write(data + '\n')
-                    
-                    print(data, '\n')
-                    
-                except Exception as e:
-                    print(f"Error fetching full tweet details: => {e}")
-
 
     def stream_now(self):
         rules = self.get_rules()
