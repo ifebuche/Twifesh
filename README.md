@@ -10,6 +10,7 @@ After some frustrations with tweepy around the v2 of Twitter API, I decided to w
 - Bug fixes: 1. retrieval of tweets failing with missing quoted content. 2. break stream on status 429 
 - More Bug fixes on rate limiting
 - Added Supported for Twitter rate limiting at Stream. Sleep 16 minutes and continue.
+- Bug fix in Profiler. Indicate that profile cannot be found if so.
 
 **Requirements** 
 <br>
