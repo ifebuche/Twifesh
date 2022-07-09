@@ -45,7 +45,7 @@ class FeshBuilder:
             a_tweet = requests.get(
                 f"https://api.twitter.com/2/tweets/", 
                 params=
-                {'ids':tweet_id, 
+                {   'ids':tweet_id, 
                     'user.fields':'created_at,description,entities,id,location,name,pinned_tweet_id,profile_image_url,protected,public_metrics,url,username,verified,withheld',
                     'place.fields':'contained_within,country,country_code,full_name,geo,id,name,place_type', 
                     'tweet.fields':'source,created_at,geo',
@@ -153,10 +153,15 @@ class Profiler(FeshBuilder):
     def get_profile_id(self):
         twifesh=Profile(self.bearer_token, self.usernames)
         speaker = twifesh.get_profile()
-        if type(speaker) != int:
-            return None
-        user_id = speaker[0]['id']
-        return user_id
+        if speaker:
+            try:
+                user_id = speaker[0].get('id')
+                if user_id:
+                    return user_id
+            except AttributeError:
+                if 'Could not find user with usernames' in speaker[0]:
+                    return None
+        return None
 
     def _mini_clean(self, data):
         this_page_of_tweets = []
