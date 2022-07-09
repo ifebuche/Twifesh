@@ -5,7 +5,11 @@ After some frustrations with tweepy around the v2 of Twitter API, I decided to w
 
 ## Updates
 - More refactoring
-- Added support for Twitter user Profile retrieval with the twifesh.api.Profile class
+- Added support for Twitter user Profile retrieval with the twifesh.api.Profile class (July 9, 2022): Takes a Twitter username and returns their profile details.
+- Added Support for getting timeline of tweets by a user with twifesh.api.Profiler class (July 10, 2022): Takes a Twitter username and returns a list of tweets they posted. 
+- Bug fixes: 1. retrieval of tweets failing with missing quoted content. 2. break stream on status 429 
+- More Bug fixes on rate limiting
+- Added Supported for Twitter rate limiting at Stream. Sleep 16 minutes and continue.
 
 **Requirements** 
 <br>
