@@ -11,6 +11,7 @@ After some frustrations with tweepy around the v2 of Twitter API, I decided to w
 - More Bug fixes on rate limiting
 - Added Supported for Twitter rate limiting at Stream. Sleep 16 minutes and continue.
 - Bug fix in Profiler. Indicate that profile cannot be found if so.
+- Added support for retrieval of a user's followers and following crowd with their public metrics.
 
 **Requirements** 
 <br>
@@ -27,7 +28,7 @@ https://developer.twitter.com/en/docs/twitter-api/tweets/filtered-stream/introdu
 **Output**
 - The output is a json file with same name as the keywords, ending in the date and time of the run
 
-**Example1: file written, no interraction**
+**Example1: Stream and write file, no interraction**
 
 $ from twifesh.api import Stream <br>
 $ twifesh = Stream(bearer_token, keywords=['topic1', 'topic2'], write_file=True) <br>
@@ -36,10 +37,25 @@ $ twifesh.stream_now() <br>
 - output: *topic1_topic2_2022July4_00_00_00s.json*
 <br><br>
 
-**Example2: no file written, asks for the topic(s)**
+**Example2: Stream and no file written, asks for the topic(s)**
 
 $ from twifesh.api import Stream<br>
 $ twifesh = Stream(bearer_token) <br>
 $ twifesh.stream_now()
 
-<br>
+<br><br>
+
+**Example3: Profile - return user(s) python list of user(s) with details and public metrics**
+
+$ from twifesh.api import Profile <br>
+$ twifesh = Profile(bearer_token, usernames=['user1,user2']) <br>
+$ twifesh.get_profile() <br>
+
+<br><br>
+
+**Example4: Profiler - return user's historical tweet activity or their followers/following list and their public metrics**
+
+$ from twifesh.api import Profiler <br>
+$ twifesh = Profiler(bearer_token, username='username') <br>
+$ twifesh.get_profile_tweets() <br>,
+$ twifesh.get_followers_following()

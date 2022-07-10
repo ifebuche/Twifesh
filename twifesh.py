@@ -143,12 +143,12 @@ class Profiler(FeshBuilder):
     """
     Get all the tweets from a tweeter user
     """
-    def __init__(self, bearer_token, usernames):
+    def __init__(self, bearer_token, username):
         """
-        username: string with profile names seperated by commas and no spaces. eg: "profile1,profile2"
+        username: string with the profile name/handle
         """
         super().__init__(bearer_token)
-        self.usernames = usernames
+        self.usernames = username
 
     def get_profile_id(self):
         twifesh=Profile(self.bearer_token, self.usernames)
@@ -163,17 +163,23 @@ class Profiler(FeshBuilder):
                     return None
         return None
 
-    def _mini_clean(self, data):
-        this_page_of_tweets = []
-        for tweet in data:
-            public_metrics = tweet.get('public_metrics')
-            del tweet['public_metrics']
-            tweet['retweet_count'] = public_metrics.get('retweet_count', 'no data')
-            tweet['reply_count'] = public_metrics.get('reply_count', 'no data')
-            tweet['like_count'] = public_metrics.get('like_count', 'no data')
-            tweet['quote_count'] = public_metrics.get('quote_count', 'no data')
-            this_page_of_tweets.append(tweet)
-        return this_page_of_tweets
+    def _mini_clean(self, data, profiles=False, tweets=False):
+        this_page = []
+        for line in data:
+            public_metrics = line.get('public_metrics')
+            del line['public_metrics']
+            if tweets:
+                line['retweet_count'] = public_metrics.get('retweet_count', 'no data')
+                line['reply_count'] = public_metrics.get('reply_count', 'no data')
+                line['like_count'] = public_metrics.get('like_count', 'no data')
+                line['quote_count'] = public_metrics.get('quote_count', 'no data')
+            elif profiles:
+                line['followers_count'] = public_metrics.get('followers_count', 'no data')
+                line['following_count'] = public_metrics.get('following_count', 'no data')
+                line['tweet_count'] = public_metrics.get('tweet_count', 'no data')
+                line['listed_count'] = public_metrics.get('listed_count', 'no data')
+            this_page.append(line)
+        return this_page
 
     def get_profile_tweets(self):
         """
@@ -195,7 +201,7 @@ class Profiler(FeshBuilder):
         json_response = response.json()
         data = json_response.get('data')
         if data:
-            mini_cleaned = self._mini_clean(data)
+            mini_cleaned = self._mini_clean(data, tweets=True)
             tweets.extend(mini_cleaned)
         next_page = json_response.get('meta').get('next_token')
         while next_page:
@@ -206,11 +212,56 @@ class Profiler(FeshBuilder):
             json_response = response.json()
             data = json_response.get('data')
             if data:
-                mini_cleaned = self._mini_clean(data)
+                mini_cleaned = self._mini_clean(data, tweets=True)
                 tweets.extend(mini_cleaned)
             next_page = json_response.get('meta').get('next_token')
         
         return tweets
+
+    def get_followers_following(self, pages=1, target='followers'):
+        """
+        Get the followers of a user/profileby username/handle or who they are following
+        - user_id of user to find their followers
+        - pages will take a maximum of 20: each page is 250 results. 1k max retrievals to stay within bounds(?)
+        """
+        if pages > 20:
+            pages = 20
+        user_id = self.get_profile_id()
+        if not user_id:
+            print(f"We could not find a Twitter user with the username: '{self.usernames}'")
+            return None
+
+        url = f"https://api.twitter.com/2/users/{user_id}/followers"
+        if target.lower().strip() == 'following':
+            url = f"https://api.twitter.com/2/users/{user_id}/following"
+
+        params = {'user.fields':'created_at,public_metrics,location,verified', 'max_results':250}
+        page = 1
+        response = requests.get(url, auth=self.bearer_oauth, params=params)
+        json_response =  json.loads(response.text)
+        user_data = json_response['data']
+        followers = []
+        
+        if user_data:
+            mini_cleaned = self._mini_clean(user_data, profiles=True)
+            followers.extend(mini_cleaned)
+            print(f"page {page}")
+            next_page = json_response.get('meta').get('next_token')
+            while next_page:
+                if page == pages: #stop at the end of the requested number of pages. Max will be 20
+                    break
+                page += 1
+                params['pagination_token'] = next_page
+                response = requests.get(url, auth=self.bearer_oauth, params=params)
+                json_response = response.json()
+                user_data = json_response.get('data')
+                if user_data:
+                    mini_cleaned = self._mini_clean(user_data, profiles=True)
+                    followers.extend(mini_cleaned)
+                    print(f'page {page}')
+                next_page = json_response.get('meta').get('next_token')
+                
+        return followers
 
 
 
