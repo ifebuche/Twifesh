@@ -55,9 +55,7 @@ class FeshBuilder:
                 json_response = json.loads(a_tweet.text)
                 status = json_response.get('status')
                 if status and status == 429:
-                    print(f"Erm... We have hit Twitter rate limit. Sleeping for 15 minutes are recommended before we continue.\nIf you do not want to wait, please hit with Ctrl + C twice.")
-                    time.sleep((60*60)*16)    
-                    # raise SystemExit
+                    return False, f"{status}: rate limit reached"
             data = json.loads(a_tweet.text)['data'][0]
             includes = json.loads(a_tweet.text)['includes']['users'][0]
             #print(f"data => {data}\nincludes => {includes}")
@@ -91,10 +89,10 @@ class FeshBuilder:
                     payloader['in_reply_to_id'] = ','.join([line['id'] for line in data.get('referenced_tweets') if line['type'] == 'replied_to'])
                 except:
                     pass
-            return payloader            
+            return True, payloader            
         except Exception as e:
-
-            print(f"Error fetching full tweet details: => {e}")
+            message = f"error fetching full tweet details: => {e}"
+            return False, message
 
 class Profile(FeshBuilder):
     def __init__(self, bearer_token, usernames):
@@ -281,9 +279,7 @@ class Stream(FeshBuilder):
             "https://api.twitter.com/2/tweets/search/stream/rules", auth=self.bearer_oauth
         )
         if response.status_code != 200:
-            raise Exception(
-                "Cannot get rules (HTTP {}): {}".format(response.status_code, response.text)
-            )
+            raise Exception(f"Cannot get rules (HTTP {response.status_code}): {response.text}")
         try:
             print(f"Last keyword(s) streamed are: => {[line['value'] for line in response.json()['data']][::-1]}")
         except KeyError:
@@ -307,15 +303,12 @@ class Stream(FeshBuilder):
             json=payload
         )
         if response.status_code != 200:
-            raise Exception(
-                "Cannot delete rules (HTTP {}): {}".format(
-                    response.status_code, response.text
-                )
-            )
+            raise Exception(f"Cannot delete rules (HTTP {response.status_code}): {response.text}")
         print('Old rule(s) successfully cleared!')
+        return True
 
 
-    def set_rules(self, delete):
+    def set_rules(self):
         """
         This uses feedback from the user to get and set the new rule(s)
         """
@@ -352,23 +345,18 @@ class Stream(FeshBuilder):
             json=payload,
         )
         if response.status_code != 201:
-            raise Exception(
-                "Failed to add rule(s) (HTTP {}): {}".format(response.status_code, response.text)
-            )
+            raise Exception(f"Failed to add rule(s) (HTTP {response.status_code}): {response.text}")
 
         print(f"Rule(s) successfully set for keywords {[line for line in self.keywords][:5]}.")
         return True
 
     def get_stream(self):
+        repetition_breaker = None #Twitter will return same tweet if rate limit is reached but app is restarted. If this is value is same as last tweet, treat is as limit reached and sleep 15
         response = requests.get(
             "https://api.twitter.com/2/tweets/search/stream", auth=self.bearer_oauth, stream=True,
         )
         if response.status_code != 200:
-            raise Exception(
-                "Cannot get stream (HTTP {}): {}".format(
-                    response.status_code, response.text
-                )
-            )
+            raise Exception(f"Cannot get stream (HTTP {response.status_code}): {response.text}")
         print("Connection to stream successful! \nListening ...")
         for response_line in response.iter_lines():
             if response_line:
@@ -376,18 +364,38 @@ class Stream(FeshBuilder):
                 if self.full_details:
                     #fetch the full tweet details
                     tweet_id = tweet_details['data']['id']
-                    tweet_details = self.get_tweet_details(tweet_id)
+                    status, tweet_details = self.get_tweet_details(tweet_id)
+            ##############################################
+            else:
+                print(response.text)###################### Bug!!!!!!!!!!!!
+                continue
+            ###############################################
             if self.write_file:
                 if tweet_details:
                     with open('_'.join(self.keywords) +self.time_obj_str + ".json", "a") as file:
                         data = json.dumps(tweet_details)
                         file.write(data + '\n')
-            print(tweet_details, '\n')                   
+            if status:
+                print(tweet_details, '\n')
+                if repetition_breaker == tweet_details:
+                    print(f"Same exact tweet returned. We suspect a limit issue.\nWe will sleep for 15 minutes.")
+                    print("Sleep started @ {dt.now()}")
+                    time.sleep(60*16)
+                repetition_breaker = tweet_details
+            else:
+                if 'rate limit reached' in tweet_details:
+                    print(f"{tweet_details}\nWe will sleep for 15 minutes.")
+                    print("Sleep started @ {dt.now()}")
+                    time.sleep(60*16)
+                elif tweet_details.startswith('error'):
+                    print(tweet_details)
+                    continue                
                 
 
     def stream_now(self):
         rules = self.get_rules()
-        delete = self.delete_all_rules(rules)
-        result = self.set_rules(delete)
-        if result:
-            self.get_stream()
+        deleted = self.delete_all_rules(rules)
+        if deleted:
+            result = self.set_rules()
+            if result:
+                self.get_stream()
