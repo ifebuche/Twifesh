@@ -12,6 +12,10 @@ After some frustrations with tweepy around the v2 of Twitter API, I decided to w
 - Added Supported for Twitter rate limiting at Stream. Sleep 16 minutes and continue.
 - Bug fix in Profiler. Indicate that profile cannot be found if so.
 - Added support for retrieval of a user's followers and following crowd with their public metrics.
+- Bug fixes + added support for exponetial back-off and recovery after a stream break is picked up
+- Bug fix
+- Raise systemexit on uncaught error in the stream
+- Bug fix for uncaught exception at dropping of stream with possible unclosed connection with a with context
 
 **Requirements** 
 <br>
