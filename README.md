@@ -16,6 +16,7 @@ After some frustrations with tweepy around the v2 of Twitter API, I decided to w
 - Bug fix
 - Raise systemexit on uncaught error in the stream
 - Bug fix for uncaught exception at dropping of stream with possible unclosed connection with a with context
+- Refactored to add custom error handling and enum to manage statis urls in helpers
 
 **Requirements** 
 <br>

@@ -18,7 +18,7 @@ Contributors: Prince Analyst
 import requests, json, re, time
 from datetime import datetime as dt
 from collections import deque
-from utils.helpers import (BadRequest, RulesException, StreamException, Url)
+from .utils.helpers import (BadRequest, RulesException, StreamException, Url)
 
 class FeshBuilder:
     def __init__(self, bearer_token):
@@ -442,4 +442,3 @@ class Stream(FeshBuilder):
             result = self.set_rules()
             if result:
                 self.get_stream()
-
