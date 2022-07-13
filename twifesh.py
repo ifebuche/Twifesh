@@ -284,12 +284,13 @@ class Stream(FeshBuilder):
             Url.rules.value, auth=self.bearer_oauth
         )
         if response.status_code != 200:
-            raise RulesException("Cannot get rules (HTTP {response.status_code}): {response.text}")
+            raise RulesException(f"Cannot get rules (HTTP {response.status_code}): {response.text}")
 
         try:
             print(f"Last keyword(s) streamed are: => {[line['value'] for line in response.json()['data']][::-1]}")
         except KeyError:
             print(f"The last streaming attempt failed. No keywords in play before now.")
+            return None
         return response.json()
 
 
@@ -309,7 +310,7 @@ class Stream(FeshBuilder):
             json=payload
         )
         if response.status_code != 200:
-            raise RulesException("Cannot delete rules (HTTP {response.status_code}): {response.text}")
+            raise RulesException(f"Cannot delete rules (HTTP {response.status_code}): {response.text}")
 
         print('Old rule(s) successfully cleared!')
         return True
@@ -319,7 +320,7 @@ class Stream(FeshBuilder):
         """
         This uses feedback from the user to get and set the new rule(s)
         """
-        keywords_array = deque()
+        keywords_array = []
 
         if not self.keywords:
             attempts = 0
@@ -352,7 +353,7 @@ class Stream(FeshBuilder):
             json=payload,
         )
         if response.status_code != 201:
-            raise RulesException("Cannot add rules (HTTP {response.status_code}): {response.text}")
+            raise RulesException(f"Cannot add rules (HTTP {response.status_code}): {response.text}")
 
         print(f"Rule(s) successfully set for keywords {[line for line in self.keywords][:5]}.")
         return True
@@ -431,8 +432,14 @@ class Stream(FeshBuilder):
         - Initiate steps to stream.
         """
         rules = self.get_rules()
-        deleted = self.delete_all_rules(rules)
-        if deleted: 
+        if rules:
+            deleted = self.delete_all_rules(rules)
+            if deleted: 
+                result = self.set_rules()
+                if result:
+                    self.get_stream()
+        else:
             result = self.set_rules()
             if result:
                 self.get_stream()
+
