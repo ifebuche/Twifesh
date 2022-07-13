@@ -30,7 +30,7 @@ class FeshBuilder:
         Method required by bearer token authentication.
         """
         header.headers["Authorization"] = f"Bearer {self.bearer_token}"
-        header.headers["User-Agent"] = "TwiFeshStreamer"
+        header.headers["User-Agent"] = "TwiFeshStreamerTitterAPIv2"
         return header
 
     def clean_tweet(self, tweet):
@@ -57,9 +57,7 @@ class FeshBuilder:
                 json_response = json.loads(a_tweet.text)
                 status = json_response.get('status')
                 if status and status == 429:
-                    print(f"Erm... We have hit Twitter rate limit. Sleeping for 15 minutes are recommended before we continue.\nIf you do not want to wait, please hit with Ctrl + C twice.")
-                    time.sleep((60*60)*16)    
-                    # raise SystemExit
+                    return False, f"{status}: rate limit reached"
             data = json.loads(a_tweet.text)['data'][0]
             includes = json.loads(a_tweet.text)['includes']['users'][0]
             #print(f"data => {data}\nincludes => {includes}")
@@ -93,10 +91,10 @@ class FeshBuilder:
                     payloader['in_reply_to_id'] = ','.join([line['id'] for line in data.get('referenced_tweets') if line['type'] == 'replied_to'])
                 except:
                     pass
-            return payloader            
+            return True, payloader            
         except Exception as e:
-
-            print(f"Error fetching full tweet details: => {e}")
+            message = f"error fetching full tweet details: => {e}"
+            return False, message
 
 class Profile(FeshBuilder):
     def __init__(self, bearer_token, usernames):
@@ -145,12 +143,12 @@ class Profiler(FeshBuilder):
     """
     Get all the tweets from a tweeter user
     """
-    def __init__(self, bearer_token, usernames):
+    def __init__(self, bearer_token, username):
         """
-        username: string with profile names seperated by commas and no spaces. eg: "profile1,profile2"
+        username: string with the profile name/handle
         """
         super().__init__(bearer_token)
-        self.usernames = usernames
+        self.usernames = username
 
     def get_profile_id(self):
         twifesh=Profile(self.bearer_token, self.usernames)
@@ -165,17 +163,23 @@ class Profiler(FeshBuilder):
                     return None
         return None
 
-    def _mini_clean(self, data):
-        this_page_of_tweets = deque()
-        for tweet in data:
-            public_metrics = tweet.get('public_metrics')
-            del tweet['public_metrics']
-            tweet['retweet_count'] = public_metrics.get('retweet_count', 'no data')
-            tweet['reply_count'] = public_metrics.get('reply_count', 'no data')
-            tweet['like_count'] = public_metrics.get('like_count', 'no data')
-            tweet['quote_count'] = public_metrics.get('quote_count', 'no data')
-            this_page_of_tweets.append(tweet)
-        return this_page_of_tweets
+    def _mini_clean(self, data, profiles=False, tweets=False):
+        this_page = deque()
+        for line in data:
+            public_metrics = line.get('public_metrics')
+            del line['public_metrics']
+            if tweets:
+                line['retweet_count'] = public_metrics.get('retweet_count', 'no data')
+                line['reply_count'] = public_metrics.get('reply_count', 'no data')
+                line['like_count'] = public_metrics.get('like_count', 'no data')
+                line['quote_count'] = public_metrics.get('quote_count', 'no data')
+            elif profiles:
+                line['followers_count'] = public_metrics.get('followers_count', 'no data')
+                line['following_count'] = public_metrics.get('following_count', 'no data')
+                line['tweet_count'] = public_metrics.get('tweet_count', 'no data')
+                line['listed_count'] = public_metrics.get('listed_count', 'no data')
+            this_page.append(line)
+        return this_page
 
     def get_profile_tweets(self):
         """
@@ -197,7 +201,7 @@ class Profiler(FeshBuilder):
         json_response = response.json()
         data = json_response.get('data')
         if data:
-            mini_cleaned = self._mini_clean(data)
+            mini_cleaned = self._mini_clean(data, tweets=True)
             tweets.extend(mini_cleaned)
         next_page = json_response.get('meta').get('next_token')
         while next_page:
@@ -208,11 +212,56 @@ class Profiler(FeshBuilder):
             json_response = response.json()
             data = json_response.get('data')
             if data:
-                mini_cleaned = self._mini_clean(data)
+                mini_cleaned = self._mini_clean(data, tweets=True)
                 tweets.extend(mini_cleaned)
             next_page = json_response.get('meta').get('next_token')
         
         return tweets
+
+    def get_followers_following(self, pages=1, target='followers'):
+        """
+        Get the followers of a user/profileby username/handle or who they are following
+        - user_id of user to find their followers
+        - pages will take a maximum of 20: each page is 250 results. 1k max retrievals to stay within bounds(?)
+        """
+        if pages > 20:
+            pages = 20
+        user_id = self.get_profile_id()
+        if not user_id:
+            print(f"We could not find a Twitter user with the username: '{self.usernames}'")
+            return None
+
+        url = f"https://api.twitter.com/2/users/{user_id}/followers"
+        if target.lower().strip() == 'following':
+            url = f"https://api.twitter.com/2/users/{user_id}/following"
+
+        params = {'user.fields':'created_at,public_metrics,location,verified', 'max_results':250}
+        page = 1
+        response = requests.get(url, auth=self.bearer_oauth, params=params)
+        json_response =  json.loads(response.text)
+        user_data = json_response['data']
+        followers = []
+        
+        if user_data:
+            mini_cleaned = self._mini_clean(user_data, profiles=True)
+            followers.extend(mini_cleaned)
+            print(f"page {page}")
+            next_page = json_response.get('meta').get('next_token')
+            while next_page:
+                if page == pages: #stop at the end of the requested number of pages. Max will be 20
+                    break
+                page += 1
+                params['pagination_token'] = next_page
+                response = requests.get(url, auth=self.bearer_oauth, params=params)
+                json_response = response.json()
+                user_data = json_response.get('data')
+                if user_data:
+                    mini_cleaned = self._mini_clean(user_data, profiles=True)
+                    followers.extend(mini_cleaned)
+                    print(f'page {page}')
+                next_page = json_response.get('meta').get('next_token')
+                
+        return followers
 
 
 
@@ -226,15 +275,17 @@ class Stream(FeshBuilder):
         if not self.keywords:
             self.keywords = []
         self.full_details = full_details
+        self.attempts = 1
+        self.expo_time = 2
+        self.broken = False
 
     def get_rules(self):
         response = requests.get(
             Url.rules.value, auth=self.bearer_oauth
         )
         if response.status_code != 200:
-            raise RulesException(
-                "Cannot get rules (HTTP {}): {}".format(response.status_code, response.text)
-            )
+            raise RulesException("Cannot get rules (HTTP {response.status_code}): {response.text}")
+
         try:
             print(f"Last keyword(s) streamed are: => {[line['value'] for line in response.json()['data']][::-1]}")
         except KeyError:
@@ -258,15 +309,13 @@ class Stream(FeshBuilder):
             json=payload
         )
         if response.status_code != 200:
-            raise RulesException(
-                "Cannot delete rules (HTTP {}): {}".format(
-                    response.status_code, response.text
-                )
-            )
+            raise RulesException("Cannot delete rules (HTTP {response.status_code}): {response.text}")
+
         print('Old rule(s) successfully cleared!')
+        return True
 
 
-    def set_rules(self, delete):
+    def set_rules(self):
         """
         This uses feedback from the user to get and set the new rule(s)
         """
@@ -303,42 +352,87 @@ class Stream(FeshBuilder):
             json=payload,
         )
         if response.status_code != 201:
-            raise RulesException(
-                "Failed to add rule(s) (HTTP {}): {}".format(response.status_code, response.text)
-            )
+            raise RulesException("Cannot add rules (HTTP {response.status_code}): {response.text}")
 
         print(f"Rule(s) successfully set for keywords {[line for line in self.keywords][:5]}.")
         return True
 
     def get_stream(self):
-        response = requests.get(
-            Url.stream.value , auth=self.bearer_oauth, stream=True,
-        )
+        repetition_breaker = None #Twitter will return same tweet if rate limit is reached but app is restarted. If this is value is same as last tweet, treat is as limit reached and sleep 15
+        
+        response = requests.get(Url.stream.value , auth=self.bearer_oauth, stream=True)
         if response.status_code != 200:
-            raise StreamException(
-                "Cannot get stream (HTTP {}): {}".format(
-                    response.status_code, response.text
-                )
-            )
-        print("Connection to stream successful! \nListening ...")
+            raise StreamException(f"Cannot get stream (HTTP {response.status_code}): {response.text}")
+        print(f"Connection to stream successful! status: {response.status_code} \nListening ...")
+
         for response_line in response.iter_lines():
             if response_line:
+                #Reset exponential timer and attemps count in case they have been used at a stream drop
+                if self.attempts > 1:
+                    self.attempts = 1
+                if self.expo_time > 2:
+                    self.expo_time = 2
+                    
                 tweet_details = json.loads(response_line)
                 if self.full_details:
                     #fetch the full tweet details
                     tweet_id = tweet_details['data']['id']
-                    tweet_details = self.get_tweet_details(tweet_id)
-            if self.write_file:
-                if tweet_details:
-                    with open('_'.join(self.keywords) +self.time_obj_str + ".json", "a") as file:
-                        data = json.dumps(tweet_details)
-                        file.write(data + '\n')
-            print(tweet_details, '\n')                   
-                
-    @property
+                    status, tweet_details = self.get_tweet_details(tweet_id)
+                    if self.write_file:
+                        if tweet_details:
+                            if 'rate limit reached' not in tweet_details:
+                                with open('_'.join(self.keywords) +self.time_obj_str + ".json", "a") as file:
+                                    data = json.dumps(tweet_details)
+                                    file.write(data + '\n')
+                    #Check for repeat tweets.
+                    if status:
+                        print(tweet_details, '\n')
+                        if repetition_breaker == tweet_details:
+                            print(f"Same exact tweet returned. We suspect a possinble limit issue.\nResetting connection to the stream after 60 seconds...")
+                            response.close()
+                            print(f"Sleep started @ {dt.now().time()}\n")
+                            time.sleep(60*1)
+                            if self.attempts < 5:
+                                self.attempts = 1
+                                self.get_stream()
+                            else:
+                                print(f"We could not restablish the stream after {self.attempts} trials.")
+                                raise SystemExit
+                        self.attempts = 1
+                        repetition_breaker = tweet_details
+                    else:
+                        if 'rate limit reached' in tweet_details:
+                            print(f"{tweet_details}\nWe will sleep for 15 minutes.")
+                            print(f"Sleep started @ {dt.now().time()}")
+                            time.sleep(60*16)
+                        elif tweet_details.startswith('error'):
+                            print(tweet_details)
+
+                else:
+                    continue #No tweet was recieved for the tweet_id. Ignore
+            else:
+                response.close()
+                print(f"We received an empty byte data: Stream disconnected.\nStarting exponential back-off.\nSleep started @ {dt.now()}")
+                print(f"Sleep: {self.expo_time} seconds ...\n")
+                time.sleep(self.expo_time)
+                self.expo_time *= 2
+                self.attempts += 1
+                if self.expo_time < 60*10:
+                    try:
+                        self.get_stream()
+                    except Exception as e: #Possible ConnectionAbortedError
+                        print(f"An uncaught error occurred: {e}")
+                        raise SystemExit
+                else:
+                    print(f"We could not reconnect the stream after {self.attempts} attempts in the past 10 minutes.\n.Exiting...")
+                        
     def stream_now(self):
+        """
+        - Initiate steps to stream.
+        """
         rules = self.get_rules()
-        delete = self.delete_all_rules(rules)
-        result = self.set_rules(delete)
-        if result:
-            self.get_stream()
+        deleted = self.delete_all_rules(rules)
+        if deleted: 
+            result = self.set_rules()
+            if result:
+                self.get_stream()
