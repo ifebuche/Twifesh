@@ -17,6 +17,8 @@ Contributors: Prince Analyst
 
 import requests, json, re, time
 from datetime import datetime as dt
+from collections import deque
+from utils.helpers import (BadRequest, RulesException, StreamException, Url)
 
 class FeshBuilder:
     def __init__(self, bearer_token):
@@ -43,7 +45,7 @@ class FeshBuilder:
         """
         try:
             a_tweet = requests.get(
-                f"https://api.twitter.com/2/tweets/", 
+                Url.tweets.value, 
                 params=
                 {   'ids':tweet_id, 
                     'user.fields':'created_at,description,entities,id,location,name,pinned_tweet_id,profile_image_url,protected,public_metrics,url,username,verified,withheld',
@@ -109,21 +111,21 @@ class Profile(FeshBuilder):
         params = {
             "user.fields":"description,created_at,pinned_tweet_id,location,verified,profile_image_url,public_metrics",
             "usernames": self.usernames}
-        url = "https://api.twitter.com/2/users/by"
+        url = Url.profile.value
         
         try:
             response = requests.request("GET", url, auth=self.bearer_oauth, params=params)
             if response.status_code != 200:
-                raise Exception(f"Request returned an error: {response.status_code} { response.text}")
+                raise BadRequest(f"Request returned an error: {response.status_code} { response.text}")
             json_response = response.json()
-            result = []
+            result = deque() #optimized for collection of data. works like list but faster
             try:
                 #Success with profile(s) match found
                 data = json_response.get('data')
                 errors = json_response.get('errors')
                 if data:
-                    for item in data:
-                        result.append(item)
+
+                    result.extend(data)
                 if errors:
                     for item in errors:
                         result.append(item['detail'])
@@ -164,7 +166,7 @@ class Profiler(FeshBuilder):
         return None
 
     def _mini_clean(self, data):
-        this_page_of_tweets = []
+        this_page_of_tweets = deque()
         for tweet in data:
             public_metrics = tweet.get('public_metrics')
             del tweet['public_metrics']
@@ -185,12 +187,12 @@ class Profiler(FeshBuilder):
             return None
         tweets = []
         page = 1
-        url = f"https://api.twitter.com/2/users/{user_id}/tweets"
+        url = f"{Url.user.value}/{user_id}/tweets"
         params = {"tweet.fields": "created_at,public_metrics", "max_results":100}
         
         response = requests.request("GET", url, auth=self.bearer_oauth, params=params)
         if response.status_code != 200:
-            raise Exception(f"Request returned an error: {response.status_code} {response.text}")
+            raise BadRequest(f"Request returned an error: {response.status_code} {response.text}")
         
         json_response = response.json()
         data = json_response.get('data')
@@ -227,10 +229,10 @@ class Stream(FeshBuilder):
 
     def get_rules(self):
         response = requests.get(
-            "https://api.twitter.com/2/tweets/search/stream/rules", auth=self.bearer_oauth
+            Url.rules.value, auth=self.bearer_oauth
         )
         if response.status_code != 200:
-            raise Exception(
+            raise RulesException(
                 "Cannot get rules (HTTP {}): {}".format(response.status_code, response.text)
             )
         try:
@@ -251,12 +253,12 @@ class Stream(FeshBuilder):
         ids = list(map(lambda rule: rule["id"], rules["data"]))
         payload = {"delete": {"ids": ids}}
         response = requests.post(
-            "https://api.twitter.com/2/tweets/search/stream/rules",
+            Url.rules.value,
             auth=self.bearer_oauth,
             json=payload
         )
         if response.status_code != 200:
-            raise Exception(
+            raise RulesException(
                 "Cannot delete rules (HTTP {}): {}".format(
                     response.status_code, response.text
                 )
@@ -268,7 +270,7 @@ class Stream(FeshBuilder):
         """
         This uses feedback from the user to get and set the new rule(s)
         """
-        keywords_array = []
+        keywords_array = deque()
 
         if not self.keywords:
             attempts = 0
@@ -296,12 +298,12 @@ class Stream(FeshBuilder):
         
         payload = {"add": keywords_array}
         response = requests.post(
-            "https://api.twitter.com/2/tweets/search/stream/rules",
+            Url.rules.value ,
             auth=self.bearer_oauth,
             json=payload,
         )
         if response.status_code != 201:
-            raise Exception(
+            raise RulesException(
                 "Failed to add rule(s) (HTTP {}): {}".format(response.status_code, response.text)
             )
 
@@ -310,10 +312,10 @@ class Stream(FeshBuilder):
 
     def get_stream(self):
         response = requests.get(
-            "https://api.twitter.com/2/tweets/search/stream", auth=self.bearer_oauth, stream=True,
+            Url.stream.value , auth=self.bearer_oauth, stream=True,
         )
         if response.status_code != 200:
-            raise Exception(
+            raise StreamException(
                 "Cannot get stream (HTTP {}): {}".format(
                     response.status_code, response.text
                 )
@@ -333,7 +335,7 @@ class Stream(FeshBuilder):
                         file.write(data + '\n')
             print(tweet_details, '\n')                   
                 
-
+    @property
     def stream_now(self):
         rules = self.get_rules()
         delete = self.delete_all_rules(rules)
